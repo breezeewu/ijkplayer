@@ -1,0 +1,1 @@
+git clone http://gitlab.srv.sunvalley/aiot/bc/media-stream

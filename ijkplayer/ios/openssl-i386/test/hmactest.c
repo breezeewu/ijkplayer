@@ -1,0 +1,5 @@
+XSym
+0025
+41111fb0d6c53788883a074da2f5ca9e
+../crypto/hmac/hmactest.c
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      

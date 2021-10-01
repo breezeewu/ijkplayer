@@ -1,0 +1,325 @@
+private version	: 0.5.2.6
+author	: dawson
+Date:2020-05-08
+modify：
+1.合并hs004sdk代码
+2.尝试解决直播开始播放时有哒哒声的问题
+
+
+private version	: 0.5.2.4
+author	: dawson
+Date:2020-03-15
+modify：
+1.解决h264关键帧转jpg失败的问题
+
+private version	: 0.5.2.1
+author	: dawson
+Date:2020-02-23
+modify：
+1.deliverData的framenum参数为兼容hs002-4，设置为-1表明该参数无效
+
+
+private version	: 0.5.1.0
+author	: dawson
+Date:2020-12-23
+modify：
+1.支持hevc裸流播放
+2.支持hevc关键帧转jpg图片
+3.解决aac音频编码码率设置无效的问题
+4.解决低帧率视频（夜视模式视频）播放音视频不同步的问题
+5.HEVC码流转mp4封装支持
+6.新增HLS文件下载转码功能
+7.移除muxer相关的接口，详情见接口修改明细
+8.增加h264/h265丢帧策略
+9.支持直播播放时间跳跃（HS005/6时间轴需求）
+10.增加获取当前播放视频时间戳接口（HS005/6时间轴需求，用户获取当前视频播放对应的本地时间）
+android：
+包/类名tv/danmaku/ijk/media/player/IjkMediaPlayer：
+定义：
+long nativeGetCurrentVideoTimeStamp();
+IOS：
+类名：IJKMediaPlayback
+属性：
+long currentVideoTimeStamp
+
+接口修改明细：
+codec_id取值如下：
+h.264:
+media_codec_id_h264/28
+h.265:
+media_codec_id_h265/174, 
+aac:
+media_codec_id_aac:86018
+
+ANDROID:
+1.媒体数据分发接口
+变更前接口定义：
+// 参数说明：int mt:media type, video:0, audio 1
+public native void nativeDeliverPacket(int mt, byte[] encData, long pts)
+变更后接口定义
+// param 1:int codec_id: video codec:h.264:media_codec_id_h264/28, h.265:media_codec_id_h265/174, audio codec:aac:media_codec_id_aac:86018
+// param 2:byte[]: encData, media codec data buffer
+// param 3:long pts: media codec packet timestamp
+// param 4:int framenum: current frame number
+public native void nativeDeliverPacket(int codec_id, byte[] encData, long pts, int framenum)
+
+2.关键帧转jpg图片接口
+变更前接口定义：
+//param 1：byte[] pdata video key frame data
+public static native byte[] nativeConvertH264ToJPG(byte[] pdata)
+变更后接口定义：
+//param 1：int codec_id, media codec id
+//param 2：byte[] pdata video key frame data
+public static native byte[] nativeConvertKeyframeToJPG(int codec_id, byte[] h264data)
+
+
+新增接口定义：
+IjkMediaPlayer播放类:
+// 开始回音消除
+public native int nativeStartEchoCancel(int channel, int samplerate, int sampleformat, int nbsamples, int usdelay);
+
+// 发送回音消除（录制音频的）pcm数据
+public native byte[] nativeEchoCancelDeliverData(byte[] pcmdata);
+// 停止回音消除
+public native void nativeStopEchoCancel();
+
+// 获取当前播放视频帧的原始时间戳（HS005/6时间轴需求，用户获取当前视频播放对应的本地时间）
+long nativeGetCurrentVideoTimeStamp();
+
+新增native类tv.danmaku.ijk.media.recorder.VavaRecorder媒体转码类，定义如下:
+public final class VavaRecorder {
+        public static final int vava_record_msg_start          = 2001;
+        public static final int vava_record_msg_progress       = 2002;
+        public static final int vava_record_msg_complete       = 2003;
+        public static final int vava_record_msg_error          = 2004;
+        public static final int vava_record_msg_interupt       = 2005;
+
+        public static final int VAVA_CODEC_ID_H264             = 28;
+        public static final int VAVA_CODEC_ID_H265             = 174;
+        public static final int VAVA_CODEC_ID_AAC              = 86018;
+        public VavaRecorder()
+        {
+            // load library and init native
+            IjkMediaPlayer player = new IjkMediaPlayer();
+
+        }
+	// 打开转码引擎，srcurl：转码源文件url，当使用实时视频转码时可为空，sinkurl：目标视频路径， tmpurl：转码临时文件路径
+        public native int open(String srcurl, String sinkurl, String tmpurl);
+	// 开始转码， pts：开始转码的时间戳，默认为0
+        public native int start(long pts);
+	// 发送音视频媒体数据包，codec_id，见VAVA_CODEC_ID定义，data：编码数据，pts：编码帧对应的时间戳，frame_num:帧序列号音视频分开计算（此接口仅限于源文件转码有效，即srcurl不为空时）
+        public native int deliverPacket(int codec_id, byte[] data, long pts, long frame_num);
+	// 停止转码，cancel：取消转码标识，0:保留转码文件，1:取消转码，删除转码目标文件
+        public native void stop(int cancel);
+	//获取转码进度（此接口仅限于源文件转码有效，即srcurl不为空时）
+        public native int getPercent();
+	// 转码是否已经结束
+        public native boolean recordIsEOF();
+        public void dump()
+        {
+            Log.d("ijkmedia", "haha,  recordEventFromNative call success, mNativeMediaRecord:" + mNativeMediaRecord);
+        }
+	// 接口回调通知
+        public void nativeEventNotify(int msgid, int wparam, int lparam)
+        {
+            Log.d("ijkmedia", "msg:" + msgid + ", wparam:" + wparam + ", lparam:" + lparam + "\n");
+            switch(msgid)
+            {
+                case vava_record_msg_start:
+                    break;
+                case vava_record_msg_progress:
+                    break;
+                case vava_record_msg_complete:
+                {
+                    // 异步通知执行stop
+                    //...
+                }
+                break;
+                case vava_record_msg_error:
+                    break;
+                case vava_record_msg_interupt:
+                    break;
+                default:
+                    break;
+            }
+        }
+	// 转码引擎实例保存句柄，仅供sdk使用
+        private long mNativeMediaRecord;
+}
+JNI转码具柄保存变量：
+private long mNativeMediaRecord;
+
+删除接口：
+IjkMediaPlayer类:
+public static native long nativeMuxerOpen(String sinkPath, String tmpPath);
+public static native void nativeMuxerDeliverData(long muxerid, int mt, byte[] encData, long pts);
+public static native void nativeMuxerClose(long muxerid, int bcancel);
+以上三个接口的功能由VavaRecorder替代
+IOS:
+IJKMediaPlayback接口:
+1.媒体编码数据分发接口
+变更前接口定义：
+// param 1[in]: int mt, media type
+// param 2[in]: mediadata:(char*) pdata, media codec data buffer
+// param 3[in]: data_size:(int)size, media codec data size
+// param 4[in]: present_time:(long long) pts_in_ms
+-(void)deliverData:(int) mt mediadata:(char*) pdata data_size:(int) size present_time:(long long) pts_in_ms;
+
+变更后接口定义：
+// param 1[in]: int codec_id, media codec type
+// param 2[in]: mediadata:(char*) pdata, media codec data buffer
+// param 3[in]: data_size:(int)size, media codec data size
+// param 4[in]: present_time:(long long) pts_in_ms
+-(void)deliverData:(int) codec_id mediadata:(char*) pdata data_size:(int) size present_time:(long long) pts_in_ms;
+增加属性：
+//当前视频帧原始时间戳（HS005/6时间轴需求，用户获取当前视频播放对应的本地时间）
+long currentVideoTimeStamp;
+
+IJKMediaEncoder接口
+1.关键帧转jpg图片数据接口
+变更前接口定义：
+//param 1[in]:(char*)pdata, media codec data buffer
+//param 2[in]:datalen:(int)datalen, media codec data size
+//param 3[in/out]:jpgdata:(char*)pjpg, output jpg codec data buffer
+//param 4[in]:jpglen:(int)jpglen: jpg codec data buffer size
++ (int)Video_KeyFrame_To_JPG:(char*)pdata datalen:(int)datalen jpgdata:(char*)pjpg jpglen:(int)jpglen
+变更后接口定义：
+//param 1[in]:(int)codecid, media codec type
+//param 2[in]:penc_data:(char*)pdata, media codec data buffer
+//param 3[in]:datalen:(int)datalen, media codec data size
+//param 4[in/out]:jpgdata:(char*)pjpg, output jpg codec data buffer
+//param 5[in]:jpglen:(int)jpglen: jpg codec data buffer size
++ (int)Video_KeyFrame_To_JPG:(int)codecid penc_data:(char*)pdata datalen:(int)datalen jpgdata:(char*)pjpg jpglen:(int)jpglen
+
+2.关键帧转jpg图片文件接口
+变更前接口定义：
+//param 1[in]:(char*)pdata, media codec data buffer
+//param 2[in]:datalen:(int)datalen, media codec data size
+//param 3[in/out]::jpgfile:(NSString*)jpgfile, output jpg picture path
++ (int)Video_KeyFrame_To_JPG_File:(char*)pdata datalen:(int)datalen jpgfile:(NSString*)jpgfile
+变更后接口定义：
+//param 1[in]:(int)codecid, media codec type
+//param 2[in]:penc_data:(char*)pdata, media codec data buffer
+//param 3[in]:datalen:(int)datalen, media codec data size
+//param 4[in/out]:jpgfile:(NSString*)jpgfile, output jpg picture path
++ (int)Video_KeyFrame_To_JPG_File:(int)codecid penc_data:(char*)pdata datalen:(int)datalen jpgfile:(NSString*)jpgfile
+删除接口：
+IJKMediaMuxer，该接口的功能由IJKMediaRecorder替代
+增加IJKMediaRecorder，定义如下：
+@interface IJKMediaRecorder:NSObject
+/*
+ 函数描述：初始化record
+ 参数：
+ id<IMediaRecordCallback>)reccb:
+ */
+//初始化并打开转码引擎，srcurl：转码源文件url，当使用实时视频转码时可为空，sinkurl：目标视频路径， tmpurl：转码临时文件路径
+-(id)initRecord:(NSString*)psrcurl sinkurl:(NSString*)sink_url tmpurl:(NSString*)tmpurl;
+//设置转码事件回调接口
+-(void)setEventNotify:(id<IMediaRecordCallback>)reccb;
+// 指定开始转码时间（此接口仅限于源文件转码有效，即srcurl不为空时）
+-(void)seek:(int64_t)pts;
+// 开始转码
+-(void)start;
+// 停止转码
+-(void)stop;
+//发送编码音视频数据（此接口仅限于源文件转码有效，即srcurl不为空时）
+-(int)deliverData:(int)codec_id data:(char*)pdata data_size:(int)size pts:(int64_t)pts framenum:(long)framenum;
+//获取转码进度（此接口仅限于源文件转码有效，即srcurl不为空时）
+-(int)getPercent;
+@end
+
+private version	: 0.3.7.2
+author	: dawson
+Date:2020-03-16
+modify：
+1.SD卡回放添加缓冲机制
+2. SD卡回放结束时上层deliver空音视频包(数据指针为null，数据长度为0)下来，播放sdk播放结束后将发送complete
+
+private version	: 0.3.6.0
+author	: dawson
+Date:2020-03-06
+modify：
+1.解决p2p连基站直播音视频延迟5秒以上的问题
+2.当视频录制时发送的视频分辨率发生改变时，立即停止录制，并发送录制中断消息到app，避免录制视频出现花屏
+android
+消息接收函数：postEventFromNative
+msgid:MEDIA_MUXER_MSG,
+msg.arg1:FFP_MUXER_INTERRUPT	2005
+msg.arg2: interrupt code, 1:resolution change, 2: video data error, 3: audio data error
+
+iOS：
+NSNotificationCenter回调通知消息
+[[NSNotificationCenter defaultCenter]
+                     postNotificationName:IJKMediaMuxerInterruptNotification
+                     object:self
+                     userInfo:@{IJKMediaMuxerCompleteNotificationInterruptReason: @(avmsg->arg2)}];
+其中：
+NSString *const IJKMediaMuxerInterruptNotification = @"IJKMediaMuxerInterruptNotification";
+NSString *const IJKMediaMuxerCompleteNotificationInterruptReason = @"IJKMediaMuxerCompleteNotificationInterruptReason";
+注：完成录制之后仍会发送MEDIA_MUXERT_MSG_COMPLETE消息，消息回调接收方法不变
+3.尝试解决直连基站对讲停止时出现视频播放快进的问题
+4.日志优化
+
+private version	: 0.3.3.3
+author	: dawson
+Date:2020-02-27
+modify：
+1.解决ios端h264转jpg崩溃的问题
+2.解决未播放视频时，h264转jpg失败的问题
+
+private version	: 0.3.2.1
+author	: dawson
+Date:2020-01-15
+modify：
+1.调整播放引擎音视频同步策略，解决音视频播放不同步的问题
+
+
+private version	: 0.3.1.0
+author	: dawson
+Date:2020-01-13
+modify：
+1.调整音视频同步策略
+2.修正日志打印时间戳毫秒级单位错误的问题
+
+private version	: 0.3.0.0
+author	: dawson
+Date:2020-01-06
+modify：
+1.修改录制接口,以解决android jni下64位转32位数据丢失的问题
+
+2.录制视频有mov改为mp4
+
+3.ijkmp_save_image_jpg返回类型改为int,成功返回0，失败返回非0
+
+
+
+private version	: 0.1.3.0
+author	: dawson
+Date:2020-01-03
+modify：
+1.直播发送的数据帧的时间戳统一改为毫秒
+2.mp4录制和编码数据帧的时间戳统一改为毫秒
+3.增加h264I帧转jpg图片数据的接口（静态方法）
+IOS接口：
+	IJKMediaEncoder H264KeyFrame_To_JPG:buf h264len:pktlen jpgdata:jpgdata jpglen:1024000
+android接口：
+	public static native byte[] nativeConvertH264ToJPG(byte[] h264data);
+private version	: 0.1.2.0
+author	: dawson
+Date:2020-01-02
+modify：
+1.解决直播画面不能播放的问题
+
+private version	: 0.1.1.0
+author	: dawson
+Date:2020-01-02
+modify：
+1.解决IPC直播录制MP4由于时间戳间隔太小导致录制出错误的问题
+2.增加详细日志排查android直播无画面的问题
+3.录制结束文件支持取消录制功能
+
+private version	: 0.1.0.0
+author	: dawson
+date:2019-12-13
+modify：
+1.IPC流媒体SDK提测通过版,用于IOS、android播放引擎、转码、编码模块接入

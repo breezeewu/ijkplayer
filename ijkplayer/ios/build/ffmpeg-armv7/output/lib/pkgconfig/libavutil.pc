@@ -1,0 +1,14 @@
+prefix=/Users/dawson.wu/Desktop/dawson/work/ios/IPC/ijkplayer/ios/build/ffmpeg-armv7/output
+exec_prefix=${prefix}
+libdir=/Users/dawson.wu/Desktop/dawson/work/ios/IPC/ijkplayer/ios/build/ffmpeg-armv7/output/lib
+includedir=/Users/dawson.wu/Desktop/dawson/work/ios/IPC/ijkplayer/ios/build/ffmpeg-armv7/output/include
+
+Name: libavutil
+Description: FFmpeg utility library
+Version: 55.78.100
+Requires: 
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavutil -lm
+Libs.private: 
+Cflags: -I${includedir}
